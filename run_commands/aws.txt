@@ -1,0 +1,149 @@
+Bilgisayarınızı kapatıp açtığınızda projenizin bulut (AWS) ayağı zaten bulutta **7/24 canlı ve çalışır durumda kalmaya devam eder.** Sizin yerel bilgisayarınızda sadece frontend (React) arayüzünü yeniden başlatmanız yeterlidir.
+
+Projenizi sunuma hazır hale getirmek için çalıştırmanız gereken komutlar ve lokasyonları şunlardır:
+
+---
+
+### 1. Ön Yüzü (Frontend) Başlatmak (Her Seferinde Gerekli)
+
+Yerel arayüzün AWS üzerindeki canlı sunucularla konuşabilmesi için yerel sunucuyu başlatmalısınız.
+
+* **Lokasyon:** `C:\Users\YZE-1\Desktop\e-ticaret\frontend`
+* **Çalıştırılacak Komut:**
+```powershell
+npm run dev
+
+```
+
+
+* **Sonuç:** Terminalde çıkan `http://localhost:5173` (veya ilgili port) linkine tıklayarak tarayıcıdan projeye giriş yapabilirsiniz.
+
+---
+
+### 2. Bulut Altyapısını Kontrol Etmek Veya Güncellemek İsterseniz (İsteğe Bağlı)
+
+AWS üzerindeki sunuculara, veritabanına veya Redis'e müdahale etmeniz gerekmiyorsa bu adımı çalıştırmanıza **gerek yoktur.** Ancak Terraform durumunu incelemek isterseniz:
+
+* **Lokasyon:** `C:\Users\YZE-1\Desktop\e-ticaret\terraform`
+* **Çalıştırılacak Komut:**
+```powershell
+# Mevcut altyapının durumunu doğrulamak için:
+terraform plan
+
+```
+
+
+
+---
+
+### 3. Backend Kodunda Değişiklik Yapıp AWS'e Tekrar Göndermek İsterseniz (İsteğe Bağlı)
+
+Eğer Python/FastAPI kodlarınızda bir değişiklik yapar ve bunu AWS'e pushlamak isterseniz, bilgisayarı yeniden açtığınızda Docker Desktop uygulamasının açık olduğundan emin olup şu komutları sırayla çalıştırmalısınız:
+
+* **Lokasyon:** `C:\Users\YZE-1\Desktop\e-ticaret` (Ana Proje Dizini)
+* **Çalıştırılacak Komutlar:**
+```powershell
+# 1. AWS ECR Deposuna Giriş (Tek satır halinde)
+docker login --username AWS --password (aws ecr get-login-password --region eu-central-1) 904053120350.dkr.ecr.eu-central-1.amazonaws.com/dopamin-shop/backend
+
+# 2. Yeni İmajı Derleme
+docker build -t 904053120350.dkr.ecr.eu-central-1.amazonaws.com/dopamin-shop/backend:latest ./backend
+
+# 3. AWS Bulutuna Gönderme
+docker push 904053120350.dkr.ecr.eu-central-1.amazonaws.com/dopamin-shop/backend:latest
+
+# 4. Sunucuları Yenileme (AWS'in yeni imajı çekmesi için)
+aws autoscaling start-instance-refresh --auto-scaling-group-name dopamin-shop-asg-20260615143547930200000003
+
+```
+
+
+
+### Özetle Sunum Öncesi Pratik Rutin:
+
+Bilgisayarı açın ➡️ **Docker Desktop** uygulamasını başlatın ➡️ Terminal ile `e-ticaret/frontend` klasörüne gidin ➡️ `npm run dev` yazın ve tarayıcıdan test edin.
+
+
+
+AWS altyapınızda kaynakları açık bırakmak, sunucuların, veritabanının ve Redis kümesinin kullanımı doğrultusunda maliyet yansıtmaya devam eder. Sunum yapmadığınız zamanlarda bütçenizi korumak için altyapıyı güvenli bir şekilde kapatıp, sunum öncesinde tekrar açabilirsiniz.
+
+Bu işlemi gerçekleştirebileceğiniz iki farklı senaryo mevcuttur: **Geçici Kapatma/Açma** (Maliyetleri %80-90 oranında düşürür, verilerinizi korur) ve **Tamamen Silme/Yeniden Kurma** (Maliyetleri sıfırlar).
+
+---
+
+## 1. DURUM: Geçici Kapatma ve Tekrar Açma (Önerilen)
+
+Bu yöntemde ağ yapılandırmanız (VPC, Load Balancer) ve veritabanı diskleriniz korunur; sadece çalışan sunucular ve veritabanı motoru durdurulur. Maliyetleri büyük oranda keser.
+
+### A) Web Konsolu Üzerinden (AWS Console)
+
+**Kapatma Adımları:**
+
+1. AWS Konsolu'na girin ve bölgenin **Frankfurt (`eu-central-1`)** olduğundan emin olun.
+2. **EC2** paneline gidin, sol menüden **Auto Scaling Groups** sekmesine tıklayın. Grubunuzu seçip **Edit** butonuna basın. `Desired capacity`, `Minimum capacity` ve `Maximum capacity` değerlerinin hepsini **`0`** yapıp kaydedin. *(Böylece AWS, çalışan EC2 sunucularını güvenli bir şekilde kapatır).*
+3. **RDS** paneline gidin, `dopamin-shop-postgres` veritabanınızı seçin. **Actions** menüsünden **Stop** seçeneğine tıklayın.
+4. **ElastiCache** paneline gidin. Redis mimarisi sunucu gibi doğrudan "durdurulamadığı" için ücret yazmasını engellemek adına Redis kümesini seçip **Delete** butonuna basarak silmeniz gerekir. *(Yedeğe gerek yoktur, Terraform ile saniyeler içinde tekrar açılacaktır).*
+
+**Geri Açma Adımları:**
+
+1. **RDS** paneline giderek veritabanınızı seçin ve **Actions -> Start** diyerek başlatın (Ayağa kalkması 3-5 dakika sürer).
+2. **EC2 Auto Scaling Groups** sekmesine gidin. `Desired`, `Minimum` ve `Maximum` kapasitelerini eski haline (Örn: `2`, `2`, `4`) getirip kaydedin. AWS yeni sunucuları otomatik başlatacaktır.
+3. Terminalinizden `terraform/` klasörüne girip `terraform apply` komutunu çalıştırın. Bu komut eksik olan Redis kümesini Frankfurt üzerinde yeniden inşa edecek ve sunuculara bağlayacaktır.
+
+### B) Terminal Üzerinden (AWS CLI)
+
+**Kapatma Komutları:**
+
+```powershell
+# 1. EC2 Sunucu sayılarını sıfıra çekerek sunucuları kapatın
+aws autoscaling update-auto-scaling-group --auto-scaling-group-name dopamin-shop-asg-20260615143547930200000003 --min-size 0 --max-size 0 --desired-capacity 0
+
+# 2. RDS PostgreSQL veritabanını durdurun
+aws rds stop-db-instance --db-instance-identifier dopamin-shop-postgres
+
+```
+
+**Geri Açma Komutları:**
+
+```powershell
+# 1. RDS PostgreSQL veritabanını yeniden başlatın
+aws rds start-db-instance --db-instance-identifier dopamin-shop-postgres
+
+# 2. EC2 Sunucu sayılarını eski haline getirerek sunucuları tetikleyin
+aws autoscaling update-auto-scaling-group --auto-scaling-group-name dopamin-shop-asg-20260615143547930200000003 --min-size 2 --max-size 4 --desired-capacity 2
+
+```
+
+---
+
+## 2. DURUM: Tamamen Silme ve Sıfırdan Kurma (Maliyeti Sıfırlama)
+
+Eğer sunuma daha uzun bir süre varsa ve AWS'in 1 kuruş bile fatura çıkarmasını istemiyorsanız, altyapının tamamını tek bir komutla silebilirsiniz.
+
+> **Kritik Not:** Bu işlem veritabanındaki test verilerini (sipariş geçmişi, demo kullanıcılar vb.) kalıcı olarak siler. Yeniden açtığınızda her şey sıfırdan temiz bir şekilde kurulur.
+
+### A) Terminal Üzerinden (Terraform En Kolay Yol)
+
+**Tamamen Silme (Kapatma):**
+Terminalinizde `terraform/` klasörünün içerisine girin ve şu komutu çalıştırın:
+
+```powershell
+terraform destroy
+
+```
+
+*Onay istendiğinde `yes` yazın. Terraform; Load Balancer, Redis, RDS ve EC2 dahil AWS üzerindeki tüm kaynakları güvenli bir şekilde imha eder. Faturanız tamamen durur.*
+
+**Sıfırdan Geri Açma:**
+Projeyi tekrar canlıya almak istediğinizde yine `terraform/` klasörünün içindeyken şu komutu çalıştırmanız yeterlidir:
+
+```powershell
+terraform apply
+
+```
+
+*Onay istendiğinde `yes` yazın. Altyapı Frankfurt üzerinde sıfırdan kurulur. Kurulum bittiğinde size yeni bir `alb_dns_name` verecektir. O yeni adresi frontend içerisindeki dosyaya yapıştırıp projenizi hemen kullanmaya başlayabilirsiniz.*
+
+### B) Web Konsolu Üzerinden
+
+Mimaride birbiriyle ilişkili 30'a yakın kaynak (VPC, Subnets, Internet Gateways, Security Groups) bulunduğu için, bu kaynakları web konsolundan el ile tek tek silmeye çalışmak bağımlılık hatalarına yol açar ve oldukça zahmetlidir. Bu nedenle tamamen silme ve sıfırdan açma senaryoları için web konsolu yerine **Terraform (`destroy` / `apply`)** rotasının kullanılması endüstri standardıdır.

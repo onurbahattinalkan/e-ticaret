@@ -1,0 +1,137 @@
+# ==============================================================================
+# Alışveriş Dopamin Simülatörü — Docker Compose
+#
+# Servisler:
+#   redis    → Celery broker + WebSocket Pub/Sub
+#   postgres → Kalıcı veri deposu
+#   backend  → FastAPI / uvicorn (port 8000)
+#   celery   → Sipariş durum pipeline worker'ı
+#   frontend → Vite geliştirme sunucusu (port 3000)
+#
+# Başlatma:
+#   docker compose up --build
+#
+# Yalnızca backend + altyapı:
+#   docker compose up redis postgres backend celery
+# ==============================================================================
+
+services:
+
+  # ── Redis: Celery broker + WebSocket Pub/Sub ─────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"           # host'tan redis-cli ile erişim için
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - dopamin_net
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dopamin_simulator
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # veriler yeniden başlatmada korunur
+    ports:
+      - "5432:5432"           # host'tan pgAdmin / psql erişimi için
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dopamin_simulator"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s       # PostgreSQL'in ilk başlangıcı için ek süre
+    networks:
+      - dopamin_net
+
+  # ── FastAPI (uvicorn) ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy   # postgres hazır olmadan başlamaz
+      redis:
+        condition: service_healthy   # redis hazır olmadan başlamaz
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: postgres        # ← localhost değil; service adı
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: dopamin_simulator
+      REDIS_URL: redis://redis:6379/0  # ← localhost değil; service adı
+      # watchfiles polling: Windows Docker Desktop bind mount'ta inotify çalışmaz
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app       # hot-reload: kaynak değişiklikleri anında yansır
+    networks:
+      - dopamin_net
+
+  # ── Celery Worker ─────────────────────────────────────────────────────────
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile         # backend ile aynı imaj; sadece komut farklı
+    restart: unless-stopped
+    # ENTRYPOINT (entrypoint.sh) ilk argümanı 'celery' gördüğünde seed atlar
+    command:
+      - celery
+      - -A
+      - app.celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: dopamin_simulator
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/app:/app/app       # kaynak değişikliklerinin worker'a yansıması için
+    networks:
+      - dopamin_net
+
+  # ── Vite Frontend ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app              # hot-reload: tüm kaynak bind mount
+      - /app/node_modules            # anonymous volume: container node_modules'u koru
+    environment:
+      VITE_USE_POLLING: "true"       # Windows Docker Desktop'ta hot-reload için
+    networks:
+      - dopamin_net
+
+# ── Network ───────────────────────────────────────────────────────────────────
+networks:
+  dopamin_net:
+    driver: bridge
+
+# ── Kalıcı Volumes ────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
