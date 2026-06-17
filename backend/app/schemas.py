@@ -2,7 +2,43 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
+
+
+# ── Auth ─────────────────────────────────────────────────────────────
+
+
+class AuthRegisterRequest(BaseModel):
+    """Kayıt isteği."""
+
+    email: EmailStr
+    password: str = Field(min_length=6, description="En az 6 karakter")
+
+
+class AuthLoginRequest(BaseModel):
+    """Giriş isteği."""
+
+    email: EmailStr
+    password: str
+
+
+class AuthUserOut(BaseModel):
+    """Token yanıtında dönen kullanıcı bilgisi."""
+
+    id: int
+    email: str
+    username: str
+    total_saved_balance: float
+
+    model_config = {"from_attributes": True}
+
+
+class AuthTokenResponse(BaseModel):
+    """JWT token yanıtı."""
+
+    access_token: str
+    token_type: str = "bearer"
+    user: AuthUserOut
 
 
 # ── Product ──────────────────────────────────────────────────────────

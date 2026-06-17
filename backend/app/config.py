@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # 3D Secure simülasyon bekleme süresi (saniye)
     CHECKOUT_DELAY_SECONDS: float = 2.5
 
+    # JWT
+    JWT_SECRET_KEY: str = "dopamin-shop-super-secret-key-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 

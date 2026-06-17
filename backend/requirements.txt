@@ -8,3 +8,6 @@ alembic==1.13.3
 celery[redis]==5.4.0
 redis==5.1.1
 websockets==13.1
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+email-validator==2.1.1

@@ -1,10 +1,19 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCartStore } from '../store/cartStore'
+import { useAuth } from '../context/AuthContext'
 
 export default function Header() {
   const items = useCartStore((s) => s.items)
   const openCart = useCartStore((s) => s.openCart)
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
+
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
 
   return (
     <header className="bg-orange-500 text-white sticky top-0 z-40 shadow-md">
@@ -17,12 +26,12 @@ export default function Header() {
           🛍️ DopaminShop
         </Link>
 
-        {/* Sahte arama çubuğu */}
+        {/* Sahte arama cubugu */}
         <div className="flex-1 mx-2 hidden sm:block">
           <div className="relative">
             <input
               type="text"
-              placeholder="Ürün, kategori veya marka ara..."
+              placeholder="Urun, kategori veya marka ara..."
               className="w-full pl-4 pr-12 py-2 rounded-md text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
               readOnly
             />
@@ -37,6 +46,36 @@ export default function Header() {
             </button>
           </div>
         </div>
+
+        {/* Auth butonlari */}
+        {user ? (
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium hidden sm:inline">
+              {user.email || user.username}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="text-sm bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-md transition-colors"
+            >
+              Cikis
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Link
+              to="/login"
+              className="text-sm bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-md transition-colors"
+            >
+              Giris
+            </Link>
+            <Link
+              to="/register"
+              className="text-sm bg-white text-orange-600 hover:bg-orange-50 px-3 py-1.5 rounded-md font-semibold transition-colors"
+            >
+              Kayit Ol
+            </Link>
+          </div>
+        )}
 
         {/* Sepet butonu */}
         <button
