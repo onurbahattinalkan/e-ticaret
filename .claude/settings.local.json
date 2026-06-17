@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/YZE-1/Desktop/e-ticaret/frontend -name .env*)"
     ]
   }
 }

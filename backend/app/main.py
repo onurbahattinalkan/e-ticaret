@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import settings
 from app.database import Base, engine
@@ -18,8 +19,19 @@ from app.routers import cart, checkout, orders, products, tracking
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
-    """Uygulama başlatılırken tabloları oluşturur."""
+    """Uygulama başlatılırken tabloları oluşturur ve eksik sütunları ekler."""
     Base.metadata.create_all(bind=engine)
+
+    # create_all() mevcut tablolara yeni sütun eklemez; burada idempotent olarak ekliyoruz.
+    with engine.connect() as conn:
+        for stmt in [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+        ]:
+            conn.execute(text(stmt))
+        conn.commit()
+
     yield
 
 

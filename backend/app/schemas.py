@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ── Auth ─────────────────────────────────────────────────────────────
@@ -13,6 +13,14 @@ class AuthRegisterRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(min_length=6, description="En az 6 karakter")
+
+    @field_validator("password")
+    @classmethod
+    def password_max_bytes(cls, v: str) -> str:
+        """bcrypt 72 byte sınırını aşan şifreleri kayıt aşamasında reddeder."""
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Şifre en fazla 72 karakter olabilir")
+        return v
 
 
 class AuthLoginRequest(BaseModel):
