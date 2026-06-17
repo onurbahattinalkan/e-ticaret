@@ -1,12 +1,11 @@
 /** Backend API temel URL'si */
-const BASE_URL = 'http://localhost:8000'
+const BASE_URL = 'http://dopamin-shop-alb-1760463302.eu-central-1.elb.amazonaws.com';
 
 /** Seed betiğinin oluşturduğu demo kullanıcı ID'si */
 export const DEMO_USER_ID = 1
 
 /** WebSocket takip endpoint'i tabanı */
-export const WS_BASE = 'ws://localhost:8000/ws/tracking'
-
+export const WS_BASE = 'ws://dopamin-shop-alb-1760463302.eu-central-1.elb.amazonaws.com/ws/tracking';
 /**
  * localStorage'dan JWT token'ı okur ve Authorization header'ı döndürür.
  */
